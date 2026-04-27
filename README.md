@@ -1,6 +1,6 @@
 # ML Trading System Architecture
 
-System-level architecture case study for an AI-assisted crypto trading platform. The production system combines a market scanner, signal orchestrator, ML service, risk gate, trade worker, persistence layer, and Telegram monitoring.
+System-level architecture case study of an AI-assisted crypto trading platform built end-to-end by a primary engineer, covering architecture decisions, failure scenarios, and production risks.
 
 This repository exists to show the architecture and engineering ownership behind the system, not to publish a trading strategy.
 
@@ -19,6 +19,20 @@ The core engineering challenge is not "call an exchange API". It is building a s
 - Packaged the system into public-safe architecture and service-level showcases without exposing proprietary strategy logic.
 - Designed around unreliable exchange APIs, stale market data, and restart recovery.
 - Treated safety controls as product-critical behavior rather than optional monitoring.
+- Built a runtime structure that can stop new risk while continuing to manage existing positions.
+- Designed operational workflows where provider failures, restarts, or ML degradation do not automatically corrupt trade lifecycle state.
+
+## System Constraints
+
+This system was built under real-world constraints:
+
+- no control over exchange API reliability or latency;
+- no guarantee that market data remains fresh during decision-making;
+- ML confidence can drift as market regimes change;
+- open positions must remain managed even when new entries are disabled;
+- automated systems need explicit safety controls before they interact with capital.
+
+These constraints shaped most architectural decisions.
 
 ## Reality of the System
 
@@ -55,6 +69,8 @@ My responsibilities included:
 - implementing key trading engine and ML integration components;
 - designing safety controls for provider failures, duplicate orders, drawdown, and restart recovery;
 - documenting observability, rollout strategy, and production risks.
+
+I was accountable for system behavior as a whole, not just individual components.
 
 ## System Diagram
 
@@ -166,6 +182,12 @@ Handling this required:
 - explicit provider timeouts;
 - worker-level reconciliation;
 - operational visibility through logs and Telegram alerts.
+
+Outcome:
+
+- duplicate exposure risk is reduced;
+- existing positions remain manageable after partial failures;
+- operators have enough context to decide whether to pause entries or intervene.
 
 ## Deep Dive: Runtime Separation for Safety
 
