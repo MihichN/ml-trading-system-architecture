@@ -10,9 +10,19 @@ The system scans crypto futures markets, builds normalized market snapshots, eva
 
 The core engineering challenge is not "call an exchange API". It is building a system where discovery, decision-making, risk controls, and position management do not block or corrupt each other.
 
+## Impact
+
+- Built an end-to-end AI-assisted trading system with a TypeScript trading engine and Python ML service.
+- Separated scanning, orchestration, ML scoring, risk gates, and worker-based position management.
+- Designed safety boundaries so new entries can be stopped without breaking exit logic.
+- Created a feedback loop for evaluating signals, trade outcomes, and model behavior.
+- Packaged the system into public-safe architecture and service-level showcases without exposing proprietary strategy logic.
+
 ## My Role
 
-I designed the system architecture, split runtime responsibilities, selected the stack, implemented key trading/ML integration parts, and documented the production risks.
+I built this system end-to-end as the architect and primary engineer.
+
+I owned both the system design and hands-on implementation: trading runtime boundaries, ML integration, persistence, monitoring, and operational safety controls.
 
 My responsibilities included:
 
@@ -20,7 +30,9 @@ My responsibilities included:
 - designing a scoring pipeline and risk gate flow;
 - integrating TypeScript services with a Python ML service;
 - defining database-backed audit and feedback loops;
-- documenting safety controls, observability, and rollout strategy.
+- implementing key trading engine and ML integration components;
+- designing safety controls for provider failures, duplicate orders, drawdown, and restart recovery;
+- documenting observability, rollout strategy, and production risks.
 
 ## System Diagram
 
@@ -103,6 +115,46 @@ Problem: automated trading needs a way to stop new risk while preserving exits.
 
 Solution: kill switch for entries, independent worker for position management.
 
+## Failure Scenarios I Designed For
+
+- Exchange API timeout during order placement.
+- Retry creates duplicate order risk.
+- ML service unavailable while positions are open.
+- Scanner keeps finding candidates while account risk is already too high.
+- Worker process restarts during an open position.
+- Market data is stale or incomplete.
+- Model confidence drifts away from real outcomes.
+
+Each scenario can create financial loss if runtime boundaries and safety controls are not explicit.
+
+## Deep Dive: Runtime Separation for Safety
+
+One of the hardest problems was separating market discovery from safety-critical position management.
+
+Challenges:
+
+- scanning can be noisy and provider-dependent;
+- ML inference can be slow or unavailable;
+- position exits must continue even when new entries are disabled;
+- retries can create duplicate order risk;
+- restarts should not lose trade lifecycle state.
+
+Solution:
+
+- scanner only discovers candidates;
+- orchestrator owns decision context and risk checks;
+- worker owns open position lifecycle;
+- persisted trade intents make recovery possible;
+- kill switch can stop new entries without stopping exits.
+
+Trade-off:
+
+- multiple runtimes add orchestration complexity, but reduce the risk of one slow path blocking safety-critical behavior.
+
+Result:
+
+- the system is designed to keep managing existing risk even when discovery or ML components degrade.
+
 ## Trade-Offs
 
 | Decision | Benefit | Cost |
@@ -113,16 +165,26 @@ Solution: kill switch for entries, independent worker for position management.
 | Telegram monitoring | Fast operational visibility | Needs alert discipline |
 | Testnet-first rollout | Safer releases | Slower strategy iteration |
 
-## Production Concerns
+## Production Risks
 
-- Hard kill switch for new entries.
-- Drawdown and daily loss limits.
-- Explicit provider timeouts.
-- Idempotent order placement.
-- Worker heartbeat monitoring.
-- Model confidence drift tracking.
-- Replay mode for historical market snapshots.
-- Structured logs and correlation IDs.
+Key risks in this system:
+
+- automated strategy opens risk during bad market conditions;
+- exchange/provider outage affects order placement or exits;
+- duplicate orders after retry;
+- stale market data leads to wrong decisions;
+- ML confidence becomes misleading over time;
+- worker failure leaves positions unmanaged.
+
+Mitigation included:
+
+- hard kill switch for new entries;
+- explicit risk gate before exchange interaction;
+- persisted trade intents;
+- worker heartbeat monitoring;
+- provider timeouts;
+- model drift tracking;
+- structured logs and correlation IDs.
 
 ## Approximate Scale Targets
 
