@@ -1,0 +1,16 @@
+.DS_Store
+.idea/
+.vscode/
+*.swp
+.env
+.env.*
+node_modules/
+dist/
+build/
+coverage/
+*.log
+models/
+artifacts/
+checkpoints/
+*.pem
+*.key
