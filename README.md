@@ -8,7 +8,7 @@ This repository exists to show the architecture and engineering ownership behind
 
 The system scans crypto futures markets, builds normalized market snapshots, evaluates candidates with ML-assisted scoring, applies deterministic risk gates, and manages open positions through a separate worker.
 
-The core engineering challenge is not "call an exchange API". It is building a system where discovery, decision-making, risk controls, and position management do not block or corrupt each other.
+The core engineering challenge is not "call an exchange API". It is building a system where discovery, decision-making, risk controls, provider failures, and position management do not block or corrupt each other.
 
 ## Impact
 
@@ -17,6 +17,28 @@ The core engineering challenge is not "call an exchange API". It is building a s
 - Designed safety boundaries so new entries can be stopped without breaking exit logic.
 - Created a feedback loop for evaluating signals, trade outcomes, and model behavior.
 - Packaged the system into public-safe architecture and service-level showcases without exposing proprietary strategy logic.
+- Designed around unreliable exchange APIs, stale market data, and restart recovery.
+- Treated safety controls as product-critical behavior rather than optional monitoring.
+
+## Reality of the System
+
+This system was designed and built as a real automated trading platform, not as a theoretical ML example.
+
+It had to handle:
+
+- market data changing faster than decision pipelines can process it;
+- exchange APIs timing out or returning partial information;
+- ML confidence becoming less reliable as market regimes change;
+- open positions that still need management when new entries are disabled;
+- operational alerts where delays can create financial risk.
+
+This influenced multiple decisions:
+
+- separating discovery from position management;
+- keeping deterministic risk gates outside the ML model;
+- persisting trade intents and decisions for restart recovery;
+- making the worker responsible for open-position lifecycle;
+- adding kill-switch semantics for new entries.
 
 ## My Role
 
@@ -126,6 +148,24 @@ Solution: kill switch for entries, independent worker for position management.
 - Model confidence drifts away from real outcomes.
 
 Each scenario can create financial loss if runtime boundaries and safety controls are not explicit.
+
+## Example Failure Case
+
+A typical failure scenario:
+
+- orchestrator produces a valid trade intent;
+- exchange API times out during order placement;
+- retry logic cannot know immediately whether the first request succeeded;
+- duplicate retry could create unintended exposure;
+- worker must still manage any resulting position safely.
+
+Handling this required:
+
+- persisted trade intents;
+- idempotent order lifecycle design where possible;
+- explicit provider timeouts;
+- worker-level reconciliation;
+- operational visibility through logs and Telegram alerts.
 
 ## Deep Dive: Runtime Separation for Safety
 
